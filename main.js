@@ -270,6 +270,84 @@ app.post('/removeDevice', (req, res) => {
 })//
 //
 
+/*Pair devices
+- dids cannot be the same
+- authenticate user
+- Check if the own pairer and pairee device
+- Add pair
+*/
+app.post('/pair', (req, res) => {
+	const username = req.body.uname;
+	const password = req.body.pass;
+	const pairer_did = req.body.pairerdid;
+	const pairee_did = req.body.paireedid;
+	if (username == null || password == null || pairer_did == null || pairee_did == null || username == "" || password == "" || pairer_did == "" || pairee_did == "") {
+		res.sendStatus(400)
+		res.end()
+	}
+
+	if (pairer_did == pairee_did) {
+		//dids cannot be the same
+		res.sendStatus(400)
+		res.end()
+	}
+
+	// authenticate user
+	const queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
+	connection.query(queryStr, [username, password], (err,rows,fields) => {
+		if (err) {
+			res.send(err)
+		} else if (rows.length == 0) {
+			//Your Username or Password is incorrect
+			res.sendStatus(400)
+		} else {
+
+			//Check if User Owns device
+			const uid = rows[0].uid
+			queryStr = "SELECT devname FROM Device WHERE did = ? AND uid = ?;"
+			connection.query(queryStr, [pairer_did, uid], (err, rows, fields) => {
+				if (err) {
+					//Failed to check if user owns device
+					res.send(err)
+				} else if (rows.length == 0) {
+					//pairer_device does not exist or user does not own the device
+					res.sendStatus(400)
+				} else {
+					//User owns pairer_device, do they own pairee?
+					const pairerDeviceName = rows[0].devname
+					queryStr = "SELECT devname FROM Device WHERE did = ? AND uid = ?;"
+					connection.query(queryStr, [pairee_did, uid], (err, rows, fields) => {
+						if (err) {
+							//Failed to check if user owns device
+							res.send(err)
+						} else if (rows.length == 0) {
+							//pairee_device does not exist or user does not own the device
+							res.sendStatus(400)
+						} else {
+							//User owns both devices
+							const paireeDeviceName = rows[0].devname
+							queryStr = "INSERT INTO paired_devices(did1, did2) VALUES(?,?);"
+							connection.query(queryStr, [pairee_did, pairer_did], (err, rows, fields) => {
+								if (err) {
+									//Failed to add device
+									res.send(err)
+								} else {
+									//Updated successfully
+									if (pairerDeviceName != "" && paireeDeviceName != "" && pairerDeviceName != null && paireeDeviceName != null) {
+										res.send("Paired " + pairerDeviceName + " to " + paireeDeviceName + " successfully!")
+									} else {
+										res.send("Paired Succesfully")
+									}
+								} // end if
+							})// end connection
+						} // end if
+					})// end connection
+				} // end if
+			})// end connection
+		} // end if
+	})
+})
+
 //localhost:3000
 app.listen(port, () => {
 	console.log("Is this working?");

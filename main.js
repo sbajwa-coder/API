@@ -293,7 +293,7 @@ app.post('/pair', (req, res) => {
 	}
 
 	// authenticate user
-	const queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
+	var queryStr = "SELECT uid FROM User WHERE login = ? AND password = ?;"
 	connection.query(queryStr, [username, password], (err,rows,fields) => {
 		if (err) {
 			res.send(err)
@@ -301,7 +301,6 @@ app.post('/pair', (req, res) => {
 			//Your Username or Password is incorrect
 			res.sendStatus(400)
 		} else {
-
 			//Check if User Owns device
 			const uid = rows[0].uid
 			queryStr = "SELECT devname FROM Device WHERE did = ? AND uid = ?;"
@@ -327,16 +326,16 @@ app.post('/pair', (req, res) => {
 							//User owns both devices
 							const paireeDeviceName = rows[0].devname
 							queryStr = "INSERT INTO paired_devices(did1, did2) VALUES(?,?);"
-							connection.query(queryStr, [pairee_did, pairer_did], (err, rows, fields) => {
+							connection.query(queryStr, [pairer_did, pairee_did], (err, rows, fields) => {
 								if (err) {
 									//Failed to add device
 									res.send(err)
 								} else {
 									//Updated successfully
 									if (pairerDeviceName != "" && paireeDeviceName != "" && pairerDeviceName != null && paireeDeviceName != null) {
-										res.send("Paired " + pairerDeviceName + " to " + paireeDeviceName + " successfully!")
+										res.send("Paired " + pairerDeviceName + " to " + paireeDeviceName + " successfully!\n")
 									} else {
-										res.send("Paired Succesfully")
+										res.send("Paired Succesfully!\n")
 									}
 								} // end if
 							})// end connection

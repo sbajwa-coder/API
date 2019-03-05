@@ -347,6 +347,76 @@ app.post('/pair', (req, res) => {
 	})
 })
 
+app.post('/pair', (req, res) => {
+	const username = req.body.uname;
+	const password = req.body.pass;
+	const pairer_did = req.body.pairerdid;
+	const pairee_did = req.body.paireedid;
+	if (username == null || password == null || pairer_did == null || pairee_did == null || username == "" || password == "" || pairer_did == "" || pairee_did == "") {
+		res.sendStatus(400)
+		res.end()
+	}
+
+	if (pairer_did == pairee_did) {
+		//dids cannot be the same
+		res.sendStatus(400)
+		res.end()
+	}
+
+	// authenticate user
+	var queryStr = "SELECT uid FROM User WHERE login = ? AND password = ?;"
+	connection.query(queryStr, [username, password], (err,rows,fields) => {
+		if (err) {
+			res.send(err)
+		} else if (rows.length == 0) {
+			//Your Username or Password is incorrect
+			res.sendStatus(400)
+		} else {
+			//Check if User Owns device
+			const uid = rows[0].uid
+			queryStr = "SELECT devname FROM Device WHERE did = ? AND uid = ?;"
+			connection.query(queryStr, [pairer_did, uid], (err, rows, fields) => {
+				if (err) {
+					//Failed to check if user owns device
+					res.send(err)
+				} else if (rows.length == 0) {
+					//pairer_device does not exist or user does not own the device
+					res.sendStatus(400)
+				} else {
+					//User owns pairer_device, do they own pairee?
+					const pairerDeviceName = rows[0].devname
+					queryStr = "SELECT devname FROM Device WHERE did = ? AND uid = ?;"
+					connection.query(queryStr, [pairee_did, uid], (err, rows, fields) => {
+						if (err) {
+							//Failed to check if user owns device
+							res.send(err)
+						} else if (rows.length == 0) {
+							//pairee_device does not exist or user does not own the device
+							res.sendStatus(400)
+						} else {
+							//User owns both devices
+							const paireeDeviceName = rows[0].devname
+							queryStr = "DELETE FROM paired_devices WHERE did1 = ? AND did2 = ?;"
+							connection.query(queryStr, [pairer_did, pairee_did], (err, rows, fields) => {
+								if (err) {
+									//Failed to unpair
+									res.send(err)
+								} else {
+									//Unpaired Succesfully
+									if (pairerDeviceName != "" && paireeDeviceName != "" && pairerDeviceName != null && paireeDeviceName != null) {
+										res.send("Unpaired " + pairerDeviceName + " and " + paireeDeviceName + " successfully!\n")
+									} else {
+										res.send("Unpaired Succesfully!\n")
+									}
+								} // end if
+							})// end connection
+						} // end if
+					})// end connection
+				} // end if
+			})// end connection
+		} // end if
+	})
+})
 //localhost:3000
 app.listen(port, () => {
 	console.log("Is this working?");

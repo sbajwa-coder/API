@@ -2,10 +2,12 @@ const http = require('http');
 const mysql = require('mysql');
 const express = require('express');
 const bodyParser = require('body-parser');
+// const WebSocket = require('ws');
 const app = express()
 
 const hostname = 'localhost';
 const port = 3000;
+// var socket;
 
 //Mysql Setup
 const pool = mysql.createPool({
@@ -30,10 +32,18 @@ app.use(bodyParser.json())
 418 - I'm a Teapot
 */
 
+// function setUpSocket() {
+// 	wss = new WebSocket.Server({ port: 8080})
+// 	wss.on('connection', function connection(ws) {
+// 		console.log("Somebody connected")
+// 	})
+// }
+// setUpSocket()
+
 /*BEGIN API*/
 /*Default Screen*/
 app.get('/', (req,res) => {
-	res.send("Hello there!");
+	res.send('Something else!');
 });
 
 /*Create New User*/
@@ -92,6 +102,40 @@ app.post('/login', (req,res) => {
 		}
 		return
 	})
+});
+
+/* Change Password */
+app.post('/changePassword', (req,res) => {
+    const username = req.body.uname
+    const oldPassword = req.body.oldPass
+    const newPassword = req.body.newPass
+    if (username == null || oldPassword == null || newPassword == null) {
+        res.sendStatus(400)
+        res.end()
+    }
+    
+    var  queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
+    connection.query(queryStr, [username, oldPassword], (err,rows,fields) => {
+        if (err) {
+            res.send(err)
+        } else if (rows.length == 0) {
+            //Your Username or Password is incorrect
+            res.sendStatus(400)
+        } else {
+            //Your Username and Password are correct => changing password
+            queryStr = "UPDATE User SET password = ? WHERE login = ?;"
+            connection.query(queryStr, [newPassword, username], (err, rows, fields) => {
+                if (err) {
+                    //Failed to register
+                    res.send(err);
+                } else {
+                    res.send("Successfully changed password for: " + username + "!\n")
+                }
+            })
+        }
+        return
+    })
+
 });
 
 /*All Users*/
@@ -347,7 +391,7 @@ app.post('/pair', (req, res) => {
 	})
 })
 
-app.post('/pair', (req, res) => {
+app.post('/unpair', (req, res) => {
 	const username = req.body.uname;
 	const password = req.body.pass;
 	const pairer_did = req.body.pairerdid;
@@ -417,7 +461,43 @@ app.post('/pair', (req, res) => {
 		} // end if
 	})
 })
+
+// Sending/Receiving Commands
+var commands = new Map()
+
+app.post('/saveCommands', (req, res) => {
+	const login = req.body.uname;
+	const command = req.body.command;
+	if (login == null || command == null || login == "" || command == "") {
+		res.sendStatus(400)
+		res.end()
+	}
+	commands.set(login, command)
+	if (commands.has(login) == false) {
+		res.sendStatus(418)
+		res.end()
+	}
+	res.end()
+})
+
+app.post('/checkCommands', (req, res) => {
+	const login = req.body.uname;
+	if (login == null || login == "") {
+		res.sendStatus(400)
+		res.end()
+	}
+	if (commands.has(login) == false) {
+		// res.sendStatus(418)
+		res.end()
+	} else {
+		res.send(commands.get(login))
+		commands.delete(login)
+	}
+})
+
 //localhost:3000
 app.listen(port, () => {
 	console.log("Is this working?");
 });
+
+//sls.alaca.ca/lock:TIMESTAMP

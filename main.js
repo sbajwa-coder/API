@@ -138,6 +138,53 @@ app.post('/changePassword', (req,res) => {
 
 });
 
+/* Change Username */
+app.post('/changeUsername', (req,res) => {
+    const oldUsername = req.body.olduname
+    const newUsername = req.body.newuname
+    const password = req.body.pass
+    if (password == null || oldUsername == null || newUsername == null) {
+        res.sendStatus(400)
+        res.end()
+    }
+
+    var queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
+    connection.query(queryStr, [oldUsername, password], (err,rows,fields) => {
+        if (err) {
+            res.send(err)
+        } else if (rows.length == 0) {
+            //Your Username or Password is incorrect
+            res.sendStatus(400)
+        } else {
+
+        	queryStr = "SELECT login FROM User WHERE login = ?;"
+        	connection.query(queryStr, [newUsername], (err,rows,fields) => {
+				if (err) {
+                    //Failed to register
+                    res.send(err);
+                } else if (rows.length == 0) {
+                    //Your Username and Password are correct => changing username
+            		queryStr = "UPDATE User SET login = ? WHERE login = ?;"
+            		connection.query(queryStr, [newUsername, oldUsername], (err, rows, fields) => {
+                		if (err) {
+                    		//Failed to register
+                    		res.send(err);
+               			} else {
+                    		res.send("Successfully changed username for: " + newUsername + "!\n")
+                		}
+            		})
+                } else {
+                	//Username Exists already
+					res.sendStatus(400)
+                }
+        	})
+
+        }
+        return
+    })
+
+});
+
 /*All Users*/
 app.get('/users', (req,res) => {
 	const queryStr = "SELECT login, uid FROM User;"

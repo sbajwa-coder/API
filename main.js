@@ -120,8 +120,7 @@ app.post('/changePassword', (req,res) => {
         if (err) {
             res.send(err)
         } else if (rows.length == 0) {
-            //Your Username or Password is incorrect
-            res.sendStatus(400)
+            res.status(400).send("Username or Password is incorrect")
         } else {
             //Your Username and Password are correct => changing password
             queryStr = "UPDATE User SET password = ? WHERE login = ?;"
@@ -154,8 +153,7 @@ app.post('/changeUsername', (req,res) => {
         if (err) {
             res.send(err)
         } else if (rows.length == 0) {
-            //Your Username or Password is incorrect
-            res.sendStatus(400)
+            res.status(400).send("Username or password is incorrect")
         } else {
 
         	queryStr = "SELECT login FROM User WHERE login = ?;"
@@ -206,14 +204,19 @@ app.post('/sendNewPassword', (req,res) => {
     	if (err) {
             res.send(err)
         } else if (rows.length == 0) {
-            //Your Username or Password is incorrect
-            res.sendStatus(400)
+			res.status(400).send("Username or Password is incorrect")
         } else {
         	var temporaryPassword = Math.random().toString(36).slice(-8);
         	var mailOptions={
+	        	from : "securelocksignal@gmail.com",
 	        	to : username,
-	        	subject : "Please confirm your Email account",
-	        	html : "Hello, your new password is" + temporaryPassword + "!" 
+	        	subject : "Spicy Lock Shawarma: temporary password",
+	        	html : "Hello there! <br/>This email contains your new temporary password" +
+	        	"for the Spicy Lock Shawarma app. Please copy it from this email in order " +
+	        	"to change it to a new password in the app! <br/>" +
+	        	"Your new password is: " + temporaryPassword + "<br/>" +
+	        	"Thanks for using the app! <br/>" +
+	        	"Sincerely, your Spicy team"
     		}
     		smtpTransport.sendMail(mailOptions, function(error, response){
 			    if(error){

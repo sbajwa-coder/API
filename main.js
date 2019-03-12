@@ -2,6 +2,7 @@ const http = require('http');
 const mysql = require('mysql');
 const express = require('express');
 const bodyParser = require('body-parser');
+const nodemailer = require("nodemailer");
 // const WebSocket = require('ws');
 const app = express()
 
@@ -183,6 +184,55 @@ app.post('/changeUsername', (req,res) => {
         return
     })
 
+});
+
+var smtpTransport = nodemailer.createTransport({
+    service: "Gmail",
+    auth: {
+        user: "securelocksignal@gmail.com",
+        pass: "490rulez"
+    }
+});
+
+app.post('/sendNewPassword', (req,res) => {
+	const username = req.body.uname
+    const password = req.body.pass
+    if (username == null || password == null) {
+        res.sendStatus(400)
+        res.end()
+    }
+    var queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
+    connection.query(queryStr, [username, password], (err,rows,fields) => {
+    	if (err) {
+            res.send(err)
+        } else if (rows.length == 0) {
+            //Your Username or Password is incorrect
+            res.sendStatus(400)
+        } else {
+        	var temporaryPassword = Math.random().toString(36).slice(-8);
+        	var mailOptions={
+	        	to : username,
+	        	subject : "Please confirm your Email account",
+	        	html : "Hello, your new password is" + temporaryPassword + "!" 
+    		}
+    		smtpTransport.sendMail(mailOptions, function(error, response){
+			    if(error){
+			        res.end("error");
+			    } else {
+			        queryStr = "UPDATE User SET password = ? WHERE login = ?;"
+            		connection.query(queryStr, [temporaryPassword, username], (err, rows, fields) => {
+                		if (err) {
+                    		//Failed to register
+                    		res.send(err);
+                		} else {
+                    		res.send("Successfully changed password for: " + username + "!\n")
+                		}
+            		})
+			    }
+			});
+        }
+        return
+    })
 });
 
 /*All Users*/

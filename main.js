@@ -44,7 +44,7 @@ app.use(bodyParser.json())
 /*BEGIN API*/
 /*Default Screen*/
 app.get('/', (req,res) => {
-	res.send('Something else!');
+	res.send('Something else3!');
 });
 
 /*Create New User*/
@@ -114,7 +114,7 @@ app.post('/changePassword', (req,res) => {
         res.sendStatus(400)
         res.end()
     }
-    
+
     var  queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
     connection.query(queryStr, [username, oldPassword], (err,rows,fields) => {
         if (err) {
@@ -194,13 +194,12 @@ var smtpTransport = nodemailer.createTransport({
 
 app.post('/sendNewPassword', (req,res) => {
 	const username = req.body.uname
-    const password = req.body.pass
-    if (username == null || password == null) {
+    if (username == null || username == "") {
         res.sendStatus(400)
         res.end()
     }
-    var queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
-    connection.query(queryStr, [username, password], (err,rows,fields) => {
+    var queryStr = "SELECT login FROM User WHERE login = ?;"
+    connection.query(queryStr, [username], (err,rows,fields) => {
     	if (err) {
             res.send(err)
         } else if (rows.length == 0) {
@@ -212,7 +211,7 @@ app.post('/sendNewPassword', (req,res) => {
 	        	to : username,
 	        	subject : "Spicy Lock Shawarma: temporary password",
 	        	html : "Hello there! <br/>This email contains your new temporary password" +
-	        	"for the Spicy Lock Shawarma app. Please copy it from this email in order " +
+	        	"for the Spicy Lock Shawarma app <br/>. Please copy it from this email in order " +
 	        	"to change it to a new password in the app! <br/>" +
 	        	"Your new password is: " + temporaryPassword + "<br/>" +
 	        	"Thanks for using the app! <br/>" +
@@ -251,6 +250,38 @@ app.get('/users', (req,res) => {
 		res.send(rows)
 	})
 });
+
+/*DATABASES*/
+app.get('/databases', (req,res) => {
+	const queryStr = "SHOW DATABASES;"
+	connection.query(queryStr, (err, rows, fields) => {
+		if (err) {
+			//Failed to get all users
+			res.send(err)
+			res.end()
+			return
+		}
+		rows.push("temp message")
+		res.send(rows)
+	})
+});
+
+/*DB custom querying*/
+app.post('/query', (req,res) => {
+	let queryStr = req.body.query.split('+').join(' ');
+
+	connection.query(queryStr, (err, rows, fields) => {
+		if (err) {
+			//Failed to get all users
+			res.send(err)
+			res.end()
+			//return
+		}
+		res.send(rows)
+	})
+});
+
+
 
 /*All Devices*/
 app.get('/devices', (req,res) => {

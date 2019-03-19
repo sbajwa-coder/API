@@ -184,12 +184,20 @@ app.post('/changeUsername', (req,res) => {
 
 });
 
+var auth = {
+    type: 'oauth2',
+    user: 'securelocksignal@gmail.com',
+    clientId: '780509228639-h30o1qm3go1q5gmlj312r56rcu2uogeh.apps.googleusercontent.com',
+    clientSecret: 'Sh0vEhl_DZQqxKzTw6fiGTeF',
+    refreshToken: '1/UU8B30m6tLtRoRG8_VeHbNx28-cyJxpKUaW4cYlFJbzY933SKzKJMHFHBmCU-ZmR',
+	accessToken: 'ya29.GlvRBhW40YPNdGhxfD6XFIKxpq-zD56xB1c4Lu7r7Tkqc_XU_LeM6smv7vdTsJIZTn0bM0edUOo6n8E8H9iosrv3V-MPFETBJi1lcZKBVPsKVH7muWM7hBVjdEWk'
+};
+
 var smtpTransport = nodemailer.createTransport({
-    service: "Gmail",
-    auth: {
-        user: "securelocksignal@gmail.com",
-        pass: "490rulez"
-    }
+	host: 'smtp.gmail.com',
+	port: 465,
+	secure: true,
+    auth: auth
 });
 
 app.post('/sendNewPassword', (req,res) => {
@@ -211,7 +219,7 @@ app.post('/sendNewPassword', (req,res) => {
 	        	to : username,
 	        	subject : "Spicy Lock Shawarma: temporary password",
 	        	html : "Hello there! <br/>This email contains your new temporary password" +
-	        	"for the Spicy Lock Shawarma app <br/>. Please copy it from this email in order " +
+	        	"for the Spicy Lock Shawarma app. <br/>Please copy it from this email in order " +
 	        	"to change it to a new password in the app! <br/>" +
 	        	"Your new password is: " + temporaryPassword + "<br/>" +
 	        	"Thanks for using the app! <br/>" +

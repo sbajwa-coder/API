@@ -611,13 +611,49 @@ app.post('/saveCommands', (req, res) => {
 		res.sendStatus(400)
 		res.end()
 	}
-	commands.set(login, command)
-	if (commands.has(login) == false) {
-		res.sendStatus(418)
+	var queryStr = "SELECT login FROM User WHERE login = ?;"
+	connection.query(queryStr, [login], (err,rows,fields) => {
+		if (err) {
+			res.send(err)
+		} else if (rows.length != 0) {
+			commands.set(login, command)
+			if (commands.has(login) == false) {
+				res.sendStatus(418)
+			}
+		} else {
+			//Username Exists already
+			res.sendStatus(400)
+		}
 		res.end()
-	}
-	res.end()
+		return
+	})
+
 })
+
+
+
+
+function sleep(ms) {
+	return new Promise(resolve => {setTimeout(resolve, ms)});
+}
+
+async function wait(res, login) {
+		//Sleep but async
+		var timer = 10; //Timer
+		var ms = 1000;	//Wait time
+		while(timer != 0) {
+			await sleep(ms);
+			timer--;
+
+			if (commands.has(login)) {
+				res.send(commands.get(login))
+				commands.delete(login)
+				return
+			}
+		}
+		return
+}
+
 
 app.post('/checkCommands', (req, res) => {
 	const login = req.body.uname;
@@ -626,8 +662,9 @@ app.post('/checkCommands', (req, res) => {
 		res.end()
 	}
 	if (commands.has(login) == false) {
-		// res.sendStatus(418)
-		res.end()
+
+		//Start Long Polling
+		wait(res, login)
 	} else {
 		res.send(commands.get(login))
 		commands.delete(login)

@@ -3,7 +3,11 @@ const mysql = require('mysql');
 const express = require('express');
 const bodyParser = require('body-parser');
 const nodemailer = require("nodemailer");
-// const WebSocket = require('ws');
+
+// WebSocket requirements
+const https = require('https');
+const fs = require('fs');
+
 const app = express()
 
 const hostname = 'localhost';
@@ -33,13 +37,35 @@ app.use(bodyParser.json())
 418 - I'm a Teapot
 */
 
-// function setUpSocket() {
-// 	wss = new WebSocket.Server({ port: 8080})
-// 	wss.on('connection', function connection(ws) {
-// 		console.log("Somebody connected")
-// 	})
-// }
-// setUpSocket()
+// SECURE SOCKETS IMPLEMENTATION
+// -----------------------------
+// gather credentials
+var privateKey  = fs.readFileSync(process.env.KEY, 'utf8');
+var certificate = fs.readFileSync(process.env.CERT, 'utf8')
+var credentials = {key: privateKey, cert: certificate};
+// create https server from express app
+var httpsServer = https.createServer(credentials, app);
+// listen
+httpsServer.listen(8443, () => {
+	  console.log('Https App started');
+});
+// Socket Server initialization
+var WebSocketServer = require('ws').Server;
+var wss = new WebSocketServer({
+    server: httpsServer
+});
+
+// Socket Server Behavior
+wss.on('connection', function connection(ws) {
+	console.log('connection');
+	ws.on('message', function incoming(message) {
+	  console.log('received: %s', message);
+	});
+
+	ws.send('something');
+});
+// END SECURE SOCKETS
+// -----------------------------
 
 /*BEGIN API*/
 /*Default Screen*/

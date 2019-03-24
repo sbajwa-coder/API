@@ -1,4 +1,3 @@
-const http = require('http');
 const mysql = require('mysql');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -8,7 +7,7 @@ const nodemailer = require("nodemailer");
 const https = require('https');
 const fs = require('fs');
 
-const app = express()
+const app = express();
 
 const hostname = 'localhost';
 const port = 3000;
@@ -40,29 +39,26 @@ app.use(bodyParser.json())
 // SECURE SOCKETS IMPLEMENTATION
 // -----------------------------
 // gather credentials
-var privateKey  = fs.readFileSync(process.env.KEY, 'utf8');
-var certificate = fs.readFileSync(process.env.CERT, 'utf8')
-var credentials = {key: privateKey, cert: certificate};
-// create https server from express app
-var httpsServer = https.createServer(credentials, app);
-// listen
-httpsServer.listen(8443, () => {
-	  console.log('Https App started');
-});
-// Socket Server initialization
-var WebSocketServer = require('ws').Server;
-var wss = new WebSocketServer({
-    server: httpsServer
+var httpsServer = https.createServer({
+		key: fs.readFileSync('/etc/letsencrypt/live/sls.alaca.ca/privkey.pem'),
+		cert: fs.readFileSync('/etc/letsencrypt/live/sls.alaca.ca/cert.pem'),
+		ca: fs.readFileSync('/etc/letsencrypt/live/sls.alaca.ca/chain.pem'),
+		requestCert: false,
+		rejectUnauthorized: false }, app);
+
+
+//var io = require('socket.io')(httpsServer);
+var io = require('socket.io')(httpsServer, {'transports': ['websocket', 'polling']});
+
+io.on('connection', client => {
+	console.log('TURKEY');
+	client.emit('welcome', { message: 'Welcome!', id: client.id });
+  client.on('event', data => { console.log('something idk'); });
+  client.on('disconnect', () => { console.log('something idk2'); });
 });
 
-// Socket Server Behavior
-wss.on('connection', function connection(ws) {
-	console.log('connection');
-	ws.on('message', function incoming(message) {
-	  console.log('received: %s', message);
-	});
-
-	ws.send('something');
+httpsServer.listen(port, () => {
+	console.log("https listening...");
 });
 // END SECURE SOCKETS
 // -----------------------------
@@ -70,7 +66,7 @@ wss.on('connection', function connection(ws) {
 /*BEGIN API*/
 /*Default Screen*/
 app.get('/', (req,res) => {
-	res.send('Something else3!');
+	res.send('HIIII333!');
 });
 
 /*Create New User*/
@@ -728,8 +724,8 @@ app.post('/checkCommands2', (req, res) => {
 })
 
 //localhost:3000
-app.listen(port, () => {
-	console.log("Is this working?");
-});
+// app.listen(port, () => {
+// 	console.log("Is this working?");
+// });
 
 //sls.alaca.ca/lock:TIMESTAMP

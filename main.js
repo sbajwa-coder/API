@@ -611,6 +611,36 @@ app.post('/saveCommands', (req, res) => {
 		res.sendStatus(400)
 		res.end()
 	}
+	commands.set(login, command)
+	if (commands.has(login) == false) {
+		res.sendStatus(418)
+		res.end()
+	}
+	res.end()
+})
+
+app.post('/checkCommands', (req, res) => {
+	const login = req.body.uname;
+	if (login == null || login == "") {
+		res.sendStatus(400)
+		res.end()
+	}
+	if (commands.has(login) == false) {
+		// res.sendStatus(418)
+		res.end()
+	} else {
+		res.send(commands.get(login))
+		commands.delete(login)
+	}
+})
+
+app.post('/saveCommands2', (req, res) => {
+	const login = req.body.uname;
+	const command = req.body.command;
+	if (login == null || command == null || login == "" || command == "") {
+		res.sendStatus(400)
+		res.end()
+	}
 	var queryStr = "SELECT login FROM User WHERE login = ?;"
 	connection.query(queryStr, [login], (err,rows,fields) => {
 		if (err) {
@@ -655,7 +685,7 @@ async function wait(res, login) {
 }
 
 
-app.post('/checkCommands', (req, res) => {
+app.post('/checkCommands2', (req, res) => {
 	const login = req.body.uname;
 	if (login == null || login == "") {
 		res.sendStatus(400)

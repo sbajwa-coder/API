@@ -673,7 +673,6 @@ app.post('/saveCommands2', (req, res) => {
 				res.sendStatus(418)
 			}
 		} else {
-			//Username Exists already
 			res.sendStatus(400)
 		}
 		res.end()
@@ -723,6 +722,47 @@ app.post('/checkCommands2', (req, res) => {
 	}
 })
 
+//Receive Lock and Battery Status
+var lock_bat = new Map()
+app.post('/saveLockBat', (req, res) => {
+	const login = req.body.uname;
+	const locked = req.body.locked;
+	const battery = req.body.battery;
+	if (login == null || locked == null || battery == null || login == "" || locked == "" || battery == "") {
+		res.sendStatus(402)
+		res.end()
+	}
+	var queryStr = "SELECT login FROM User WHERE login = ?;"
+	connection.query(queryStr, [login], (err,rows,fields) => {
+		if (err) {
+			res.send(err)
+		} else if (rows.length != 0) {
+			lock_bat.set(login, [locked, battery])
+			if (lock_bat.has(login) == false) {
+				res.sendStatus(418)
+			}
+		} else {
+			res.sendStatus(400)
+		}
+		res.end()
+		return
+	})
+
+})
+
+app.post('/checkStatus', (req, res) => {
+	const login = req.body.uname;
+	if (login == null || login == "") {
+		res.sendStatus(400)
+		res.end()
+	}
+	if (lock_bat.has(login) == false) {
+		// res.sendStatus(418)
+		res.end()
+	} else {
+		res.send(lock_bat.get(login))
+	}
+})
 //localhost:3000
 // app.listen(port, () => {
 // 	console.log("Is this working?");

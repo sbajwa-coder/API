@@ -687,13 +687,22 @@ app.post('/saveCommands', (req, res) => {
 		res.sendStatus(400)
 		res.end()
 	}
-	
-	commands.set(token, command)
-	if (commands.has(token) == false) {
-		res.sendStatus(418)
-	}
-	res.end()
-	return
+	var queryStr = "SELECT token FROM User where token = ?;"
+	connection.query(queryStr, [token], (err,rows,fields) => {
+		if (err) {
+			res.send(err)
+		} else if (rows.length == 0 || rows[0].token == "" || rows[0].token == null) {
+			//Never logged in or token is outdated
+			res.send("User never logged in or token out of date. Please get new token.")
+		} else {
+			commands.set(token, command)
+			if (commands.has(token) == false) {
+				res.sendStatus(418)
+			}
+			res.end()
+			return
+		}
+	})
 })
 
 
@@ -747,14 +756,25 @@ app.post('/saveLockBat', (req, res) => {
 		res.sendStatus(402)
 		res.end()
 	}
-	
-	lock_bat.set(token, [locked, battery])
-	if (lock_bat.has(token) == false) {
-		res.sendStatus(418)
-	}
-	res.end()
-	return
 
+	var queryStr = "SELECT token FROM User where token = ?;"
+	connection.query(queryStr, [token], (err,rows,fields) => {
+		if (err) {
+			res.sendStatus(400)
+		} else if (rows.length == 0 || rows[0].token == "" || rows[0].token == null) {
+			//Never logged in or token is outdated
+			res.send("User never logged in or token out of date. Please get new token.")
+		} else {
+			lock_bat.set(token, [locked, battery])
+			if (lock_bat.has(token) == false) {
+				res.sendStatus(418)
+			}
+			res.end()
+			return
+		}
+	})
+
+	
 })
 
 app.post('/checkStatus', (req, res) => {
@@ -763,6 +783,7 @@ app.post('/checkStatus', (req, res) => {
 		res.sendStatus(400)
 		res.end()
 	}
+	
 	if (lock_bat.has(token) == false) {
 		// res.sendStatus(418)
 		res.end()

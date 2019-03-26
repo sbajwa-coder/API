@@ -113,7 +113,7 @@ app.post('/login', (req,res) => {
 		res.end()
 	}
 
-	const queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
+	var queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
 	connection.query(queryStr, [username, password], (err,rows,fields) => {
 		if (err) {
 			res.send(err)
@@ -121,7 +121,29 @@ app.post('/login', (req,res) => {
 			//Your Username or Password is incorrect
 			res.sendStatus(400)
 		} else {
-			res.send("Success!\n")
+			queryStr = "SELECT token FROM User WHERE login = ? AND password = ?;"
+			connection.query(queryStr, [username, password], (err,rows,fields) => {
+				if (err) {
+					res.send(err)
+				} else if (rows[0].token == "" || rows[0].token == null) {
+					//No token, must generate
+					token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+					queryStr = "UPDATE User SET token = ?, token_bday = now() WHERE login = ? AND password = ?;"
+					connection.query(queryStr, [token, username, password], (err,rows,fields) => {
+						if (err) {
+							res.send(err)
+						} else {
+							//Send Token back
+							res.send(token)
+						}
+					})
+
+				} else {
+					//Token already exists, return token to user
+					res.send(rows[0].token)
+				}
+			})
+
 		}
 		return
 	})
@@ -626,6 +648,7 @@ app.post('/unpair', (req, res) => {
 // Sending/Receiving Commands
 var commands = new Map()
 
+/*
 app.post('/saveCommands', (req, res) => {
 	const login = req.body.uname;
 	const command = req.body.command;
@@ -655,30 +678,22 @@ app.post('/checkCommands', (req, res) => {
 		commands.delete(login)
 	}
 })
+*/
 
-app.post('/saveCommands2', (req, res) => {
-	const login = req.body.uname;
+app.post('/saveCommands', (req, res) => {
+	const token = req.body.token;
 	const command = req.body.command;
-	if (login == null || command == null || login == "" || command == "") {
+	if (command == null || token == null || command == "" || token == "") {
 		res.sendStatus(400)
 		res.end()
 	}
-	var queryStr = "SELECT login FROM User WHERE login = ?;"
-	connection.query(queryStr, [login], (err,rows,fields) => {
-		if (err) {
-			res.send(err)
-		} else if (rows.length != 0) {
-			commands.set(login, command)
-			if (commands.has(login) == false) {
-				res.sendStatus(418)
-			}
-		} else {
-			res.sendStatus(400)
-		}
-		res.end()
-		return
-	})
-
+	
+	commands.set(token, command)
+	if (commands.has(token) == false) {
+		res.sendStatus(418)
+	}
+	res.end()
+	return
 })
 
 
@@ -688,7 +703,7 @@ function sleep(ms) {
 	return new Promise(resolve => {setTimeout(resolve, ms)});
 }
 
-async function wait(res, login) {
+async function wait(res, token) {
 		//Sleep but async
 		var timer = 10; //Timer
 		var ms = 1000;	//Wait time
@@ -696,9 +711,9 @@ async function wait(res, login) {
 			await sleep(ms);
 			timer--;
 
-			if (commands.has(login)) {
-				res.send(commands.get(login))
-				commands.delete(login)
+			if (commands.has(token)) {
+				res.send(commands.get(token))
+				commands.delete(token)
 				return
 			}
 		}
@@ -706,61 +721,53 @@ async function wait(res, login) {
 }
 
 
-app.post('/checkCommands2', (req, res) => {
-	const login = req.body.uname;
-	if (login == null || login == "") {
+app.post('/checkCommands', (req, res) => {
+	const token = req.body.token;
+	if (token == null || token == "") {
 		res.sendStatus(400)
 		res.end()
 	}
-	if (commands.has(login) == false) {
+	if (commands.has(token) == false) {
 
 		//Start Long Polling
-		wait(res, login)
+		wait(res, token)
 	} else {
-		res.send(commands.get(login))
-		commands.delete(login)
+		res.send(commands.get(token))
+		commands.delete(token)
 	}
 })
 
 //Receive Lock and Battery Status
 var lock_bat = new Map()
 app.post('/saveLockBat', (req, res) => {
-	const login = req.body.uname;
+	const token = req.body.token;
 	const locked = req.body.locked;
 	const battery = req.body.battery;
-	if (login == null || locked == null || battery == null || login == "" || locked == "" || battery == "") {
+	if (token == null || locked == null || battery == null || token == "" || locked == "" || battery == "") {
 		res.sendStatus(402)
 		res.end()
 	}
-	var queryStr = "SELECT login FROM User WHERE login = ?;"
-	connection.query(queryStr, [login], (err,rows,fields) => {
-		if (err) {
-			res.send(err)
-		} else if (rows.length != 0) {
-			lock_bat.set(login, [locked, battery])
-			if (lock_bat.has(login) == false) {
-				res.sendStatus(418)
-			}
-		} else {
-			res.sendStatus(400)
-		}
-		res.end()
-		return
-	})
+	
+	lock_bat.set(token, [locked, battery])
+	if (lock_bat.has(token) == false) {
+		res.sendStatus(418)
+	}
+	res.end()
+	return
 
 })
 
 app.post('/checkStatus', (req, res) => {
-	const login = req.body.uname;
-	if (login == null || login == "") {
+	const token = req.body.token;
+	if (token == null || token == "") {
 		res.sendStatus(400)
 		res.end()
 	}
-	if (lock_bat.has(login) == false) {
+	if (lock_bat.has(token) == false) {
 		// res.sendStatus(418)
 		res.end()
 	} else {
-		res.send(lock_bat.get(login))
+		res.send(lock_bat.get(token))
 	}
 })
 //localhost:3000

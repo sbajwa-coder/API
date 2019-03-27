@@ -85,20 +85,21 @@ app.post('/register', (req,res) => {
 			res.send(err)
 		} else if (rows.length == 0) {
 			//Register User
-			queryStr = "INSERT INTO User (login, password) VALUES (?, ?);"
-			connection.query(queryStr, [username, password], (err, rows, fields) => {
+			token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+			queryStr = "INSERT INTO User (login, password, token) VALUES (?, ?, ?);";
+			connection.query(queryStr, [username, password, token], (err, rows, fields) => {
 				if (err) {
 					//Failed to register
 					res.send(err);
 				} else {
-					res.send("Successfully registered with: " + username + "!\n")
+					res.send(token);
+					//res.send("Successfully registered with: " + username + "!\n")
 				}
 			})
 		} else {
 			//Username Exists already
 			res.sendStatus(400)
 		}
-		res.end()
 		return
 	})
 
@@ -288,6 +289,77 @@ app.post('/sendNewPassword', (req,res) => {
         return
     })
 });
+
+app.post('/sendConfirmEmail', (req,res) => {
+    const username = req.body.uname
+    if (username == null || username == "") {
+        res.sendStatus(400)
+        res.end()
+    }
+    var queryStr = "SELECT login FROM User WHERE login = ?;"
+    connection.query(queryStr, [username], (err,rows,fields) => {
+        if (err) {
+            res.send(err)
+        } else if (rows.length == 0) {
+            res.status(400).send("Username is incorrect")
+        } else {
+            var confirmToken = Math.floor((Math.random() * 100) + 54);
+            var link = "http://sls.alaca.ca/verify?name=" + username + "&id="+confirmToken;
+            var mailOptions={
+                from : "securelocksignal@gmail.com",
+                to : username,
+                subject : "Spicy Lock Shawarma: confirm your email",
+                html : "link: " + link
+            }
+            smtpTransport.sendMail(mailOptions, function(error, response){
+                if(error){
+                    res.end("error");
+                } else {
+                    queryStr = "UPDATE User SET confirmed_id = ? WHERE login = ?;"
+                    connection.query(queryStr, [confirmToken, username], (err, rows, fields) => {
+                        if (err) {
+                            //Failed to register
+                            res.send(err);
+                        } else {
+                            res.send("Successfully send confirm link for: " + username + "!\n")
+                        }
+                    })
+                }
+            });
+        }
+        return
+    })
+});
+
+app.get('/verify',function(req,res){
+    if(("http://"+req.get('host'))==("http://sls.alaca.ca")) {
+        var queryStr = "SELECT login FROM User WHERE login = ? AND confirmed_id = ?;"
+        connection.query(queryStr, [req.query.name, req.query.id], (err,rows,fields) => {
+            if (err) {
+                res.send(err)
+            } else if (rows.length == 0) {
+                res.status(400).send("Something went wrong, request a new confirmation link.")
+            } else {
+                queryStr = "UPDATE User SET confirmed = 1, confirmed_id = NULL WHERE login = ?;"
+                    connection.query(queryStr, [req.query.name], (err, rows, fields) => {
+                        if (err) {
+                            //Failed to register
+                            res.send(err);
+                        } else {
+                            res.send("Successfully confirmed account for: " + req.query.name + "!\n")
+                        }
+                    })
+            }
+            return
+        })
+    }
+    else
+    {
+        res.end("<h1>Request is from unknown source</h1>");
+    }
+    return
+});
+
 
 /*All Users*/
 app.get('/users', (req,res) => {
@@ -681,6 +753,7 @@ app.post('/checkCommands', (req, res) => {
 */
 
 app.post('/saveCommands', (req, res) => {
+	console.log("save commands ...");
 	const token = req.body.token;
 	const command = req.body.command;
 	if (command == null || token == null || command == "" || token == "") {
@@ -731,6 +804,7 @@ async function wait(res, token) {
 
 
 app.post('/checkCommands', (req, res) => {
+	console.log("command check ....");
 	const token = req.body.token;
 	if (token == null || token == "") {
 		res.sendStatus(400)
@@ -774,20 +848,23 @@ app.post('/saveLockBat', (req, res) => {
 		}
 	})
 
-	
+
 })
 
 app.post('/checkStatus', (req, res) => {
+	console.log("status check ...");
 	const token = req.body.token;
 	if (token == null || token == "") {
 		res.sendStatus(400)
 		res.end()
 	}
-	
+
 	if (lock_bat.has(token) == false) {
 		// res.sendStatus(418)
+		console.log("no status entry ... ");
 		res.end()
 	} else {
+		console.log("returning pc status ...");
 		res.send(lock_bat.get(token))
 	}
 })

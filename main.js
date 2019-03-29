@@ -3,6 +3,10 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const nodemailer = require("nodemailer");
 
+//For Password hashing
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
+
 // WebSocket requirements
 const https = require('https');
 const fs = require('fs');
@@ -86,16 +90,28 @@ app.post('/register', (req,res) => {
 		} else if (rows.length == 0) {
 			//Register User
 			token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-			queryStr = "INSERT INTO User (login, password, token) VALUES (?, ?, ?);";
-			connection.query(queryStr, [username, password, token], (err, rows, fields) => {
+
+			//Hash Password
+			bcrypt.hash(password, saltRounds, function(err, hash) {
 				if (err) {
-					//Failed to register
-					res.send(err);
+					res.send(err)
 				} else {
-					res.send(token);
-					//res.send("Successfully registered with: " + username + "!\n")
+					// Store hash in your password DB.
+					queryStr = "INSERT INTO User (login, password, token) VALUES (?, ?, ?);";
+					connection.query(queryStr, [username, hash, token], (err, rows, fields) => {
+						if (err) {
+							//Failed to register
+							res.send(err);
+						} else {
+							res.send(token);
+							//res.send("Successfully registered with: " + username + "!\n")
+						}
+					})
+
 				}
 			})
+
+
 		} else {
 			//Username Exists already
 			res.sendStatus(400)
@@ -108,43 +124,51 @@ app.post('/register', (req,res) => {
 /*Login*/
 app.post('/login', (req,res) => {
 	const username = req.body.uname;
-	const password = req.body.pass;
+	var password = req.body.pass;
 	if (username == null || password == null) {
 		res.sendStatus(400)
 		res.end()
 	}
 
-	var queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
-	connection.query(queryStr, [username, password], (err,rows,fields) => {
+	var queryStr = "SELECT password FROM User WHERE login = ?;"
+	connection.query(queryStr, [username], (err,rows,fields) => {
 		if (err) {
 			res.send(err)
 		} else if (rows.length == 0) {
-			//Your Username or Password is incorrect
+			//Your Username is incorrect
 			res.sendStatus(400)
 		} else {
-			queryStr = "SELECT token FROM User WHERE login = ? AND password = ?;"
-			connection.query(queryStr, [username, password], (err,rows,fields) => {
-				if (err) {
-					res.send(err)
-				} else if (rows[0].token == "" || rows[0].token == null) {
-					//No token, must generate
-					token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-					queryStr = "UPDATE User SET token = ?, token_bday = now() WHERE login = ? AND password = ?;"
-					connection.query(queryStr, [token, username, password], (err,rows,fields) => {
+			// Load hash from your password DB.
+			bcrypt.compare(password, rows[0].password, function(err, is_same) {
+				if (is_same) {
+					//Password is correct
+					password = rows[0].password
+					queryStr = "SELECT token FROM User WHERE login = ? AND password = ?;"
+					connection.query(queryStr, [username, password], (err,rows,fields) => {
 						if (err) {
 							res.send(err)
+						} else if (rows[0].token == "" || rows[0].token == null) {
+							//No token, must generate
+							token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+							queryStr = "UPDATE User SET token = ?, token_bday = now() WHERE login = ? AND password = ?;"
+							connection.query(queryStr, [token, username, password], (err,rows,fields) => {
+								if (err) {
+									res.send(err)
+								} else {
+									//Send Token back
+									res.send(token)
+								}
+							})//End database query
 						} else {
-							//Send Token back
-							res.send(token)
+							//Token already exists, return token to user
+							res.send(rows[0].token)
 						}
-					})
-
+					})//End databse query
 				} else {
-					//Token already exists, return token to user
-					res.send(rows[0].token)
+					//Password incorrect
+					res.sendStatus(400)
 				}
-			})
-
+			})//end bcrypt
 		}
 		return
 	})
@@ -160,73 +184,94 @@ app.post('/changePassword', (req,res) => {
         res.end()
     }
 
-    var  queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
+    var queryStr = "SELECT password FROM User WHERE login = ?;"
     connection.query(queryStr, [username, oldPassword], (err,rows,fields) => {
         if (err) {
             res.send(err)
         } else if (rows.length == 0) {
             res.status(400).send("Username or Password is incorrect")
         } else {
-            //Your Username and Password are correct => changing password
-            queryStr = "UPDATE User SET password = ? WHERE login = ?;"
-            connection.query(queryStr, [newPassword, username], (err, rows, fields) => {
-                if (err) {
-                    //Failed to register
-                    res.send(err);
-                } else {
-                    res.send("Successfully changed password for: " + username + "!\n")
-                }
-            })
+			  	//Comparing old password
+				bcrypt.compare(oldPassword, rows[0].password, function(err, is_same) {
+					if (is_same) {
+						//Your Username and Password are correct => changing password
+						bcrypt.hash(newPassword, saltRounds, function(err, hash) {
+							if (err) {
+								res.send(err)
+							}
+
+							queryStr = "UPDATE User SET password = ? WHERE login = ?;"
+			            connection.query(queryStr, [hash, username], (err, rows, fields) => {
+			                if (err) {
+			                    //Failed to register
+			                    res.send(err);
+			                } else {
+			                    res.send("Successfully changed password for: " + username + "!\n")
+			                }
+			            }); //end query
+						}); //bcrypt hash end
+					} else {
+						//Password incorrect
+						res.status(400).send("Username or Password is incorrect")
+					}
+				}); // bcrypt compare end
         }
         return
-    })
-
+    });
 });
 
 /* Change Username */
 app.post('/changeUsername', (req,res) => {
-    const oldUsername = req.body.olduname
-    const newUsername = req.body.newuname
-    const password = req.body.pass
-    if (password == null || oldUsername == null || newUsername == null) {
-        res.sendStatus(400)
-        res.end()
-    }
+	const oldUsername = req.body.olduname
+	const newUsername = req.body.newuname
+	var password = req.body.pass
+	if (password == null || oldUsername == null || newUsername == null) {
+	   res.sendStatus(400)
+	   res.end()
+	}
 
-    var queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
-    connection.query(queryStr, [oldUsername, password], (err,rows,fields) => {
-        if (err) {
-            res.send(err)
-        } else if (rows.length == 0) {
-            res.status(400).send("Username or password is incorrect")
-        } else {
-
-        	queryStr = "SELECT login FROM User WHERE login = ?;"
-        	connection.query(queryStr, [newUsername], (err,rows,fields) => {
+ 	var queryStr = "SELECT password FROM User WHERE login = ?;"
+ 	connection.query(queryStr, [oldUsername], (err,rows,fields) => {
+     	if (err) {
+         res.send(err)
+     	} else if (rows.length == 0) {
+         res.status(400).send("Username or password is incorrect")
+     	} else {
+			bcrypt.compare(password, rows[0].password, function(err, is_same) {
+				password = rows[0].password
 				if (err) {
+					//Something went wrong
+					res.send(err)
+				} else if (is_same){
+					queryStr = "SELECT login FROM User WHERE login = ?;"
+					connection.query(queryStr, [newUsername], (err,rows,fields) => {
+						if (err) {
                     //Failed to register
                     res.send(err);
-                } else if (rows.length == 0) {
+                	} else if (rows.length == 0) {
                     //Your Username and Password are correct => changing username
-            		queryStr = "UPDATE User SET login = ? WHERE login = ?;"
-            		connection.query(queryStr, [newUsername, oldUsername], (err, rows, fields) => {
-                		if (err) {
-                    		//Failed to register
-                    		res.send(err);
+            			queryStr = "UPDATE User SET login = ? WHERE login = ?;"
+            			connection.query(queryStr, [newUsername, oldUsername], (err, rows, fields) => {
+                			if (err) {
+                    			//Failed to register
+                    			res.send(err);
                			} else {
-                    		res.send("Successfully changed username for: " + newUsername + "!\n")
-                		}
-            		})
-                } else {
-                	//Username Exists already
-					res.sendStatus(400)
-                }
-        	})
-
-        }
-        return
-    })
-
+                    			res.send("Successfully changed username to: " + newUsername + "!\n")
+                			}
+            			})
+                	} else {
+                		//Username Exists already
+							res.sendStatus(400).send("Username exists already")
+                	}
+		        	})
+				} else {
+					//password incorrect
+					res.status(400).send("Username or password is incorrect")
+				}
+			})
+		}
+	})
+   // return
 });
 
 var auth = {
@@ -380,7 +425,7 @@ app.get('/databases', (req,res) => {
 	const queryStr = "SHOW DATABASES;"
 	connection.query(queryStr, (err, rows, fields) => {
 		if (err) {
-			//Failed to get all users
+			//Failed to get all databases
 			res.send(err)
 			res.end()
 			return
@@ -429,10 +474,10 @@ app.post('/removeAccount', (req, res) => {
 		res.sendStatus(400)
 		res.end()
 	}
-	var queryStr = "SELECT login FROM User WHERE login = ? AND password = ?;"
 
 	//Authenticate User
-	connection.query(queryStr, [username, password], (err,rows,fields) => {
+	var queryStr = "SELECT password FROM User WHERE login = ?;"
+	connection.query(queryStr, [username], (err,rows,fields) => {
 		if (err) {
 			//Failed to authenticate User
 			res.send(err)
@@ -440,25 +485,35 @@ app.post('/removeAccount', (req, res) => {
 			//Your Username or Password is incorrect
 			res.sendStatus(400)
 		} else {
-			//Delete User
-			queryStr = "DELETE FROM User WHERE login = ?;"
-			connection.query(queryStr, [username], (err, rows, fields) => {
+			bcrypt.compare(password, rows[0].password, function(err, is_same) {
 				if (err) {
-					//Failed to delete User
 					res.send(err)
+				} else if (is_same) {
+					//Delete User
+					queryStr = "DELETE FROM User WHERE login = ?;"
+					connection.query(queryStr, [username], (err, rows, fields) => {
+						if (err) {
+							//Failed to delete User
+							res.send(err)
+						} else {
+							res.send("Successfully deleted " + username + "! It was fun having you around! - Your Friends at Spicy Team\n")
+						}
+						res.end()
+						return
+					})
 				} else {
-					res.send("Successfully deleted " + username + "! It was fun having you around!\n")
+					//Password incorrect
+					res.sendStatus(400)
 				}
-				res.end()
-				return
 			})
 		}
 		return
-	})
-
+	}) //end query
 })
 
+
 /*Adding new Device*/
+/* UNUSED CODE
 app.post('/addDevice', (req, res) => {
 	const username = req.body.uname;
 	const password = req.body.pass;
@@ -467,6 +522,16 @@ app.post('/addDevice', (req, res) => {
 		res.sendStatus(400)
 		res.end()
 	}
+
+	//Hash Password
+	bcrypt.hash(password, saltRounds, function(err, hash) {
+		if (err) {
+			res.send(err)
+		} else {
+			password = hash
+		}
+	}
+
 	var queryStr = "SELECT uid FROM User WHERE login = ? AND password = ?;"
 
 	//Authenticate User
@@ -510,6 +575,7 @@ app.post('/addDevice', (req, res) => {
 		return
 	})
 })
+Unused Code */
 
 /*Removing Device
 - Authenicate User
@@ -517,6 +583,7 @@ app.post('/addDevice', (req, res) => {
 - Check if User Owns Device
 - Delete Device
 */
+/* UNUSED CODE
 app.post('/removeDevice', (req, res) => {
 	const username = req.body.uname;
 	const password = req.body.pass;
@@ -525,6 +592,16 @@ app.post('/removeDevice', (req, res) => {
 		res.sendStatus(400)
 		res.end()
 	}
+
+	//Hash Password
+	bcrypt.hash(password, saltRounds, function(err, hash) {
+		if (err) {
+			res.send(err)
+		} else {
+			password = hash
+		}
+	}
+
 	var queryStr = "SELECT uid FROM User WHERE login = ? AND password = ?;"
 
 	//Authenticate User
@@ -568,6 +645,7 @@ app.post('/removeDevice', (req, res) => {
 	})// end connection
 })//
 //
+UNUSED CODE */
 
 /*Pair devices
 - dids cannot be the same
@@ -575,6 +653,7 @@ app.post('/removeDevice', (req, res) => {
 - Check if the own pairer and pairee device
 - Add pair
 */
+/*UNUSED CODE
 app.post('/pair', (req, res) => {
 	const username = req.body.uname;
 	const password = req.body.pass;
@@ -589,6 +668,15 @@ app.post('/pair', (req, res) => {
 		//dids cannot be the same
 		res.sendStatus(400)
 		res.end()
+	}
+
+	//Hash Password
+	bcrypt.hash(password, saltRounds, function(err, hash) {
+		if (err) {
+			res.send(err)
+		} else {
+			password = hash
+		}
 	}
 
 	// authenticate user
@@ -662,6 +750,15 @@ app.post('/unpair', (req, res) => {
 		res.end()
 	}
 
+	//Hash Password
+	bcrypt.hash(password, saltRounds, function(err, hash) {
+		if (err) {
+			res.send(err)
+		} else {
+			password = hash
+		}
+	}
+
 	// authenticate user
 	var queryStr = "SELECT uid FROM User WHERE login = ? AND password = ?;"
 	connection.query(queryStr, [username, password], (err,rows,fields) => {
@@ -716,6 +813,8 @@ app.post('/unpair', (req, res) => {
 		} // end if
 	})
 })
+
+UNUSED CODE */
 
 // Sending/Receiving Commands
 var commands = new Map()
@@ -823,6 +922,7 @@ app.post('/checkCommands', (req, res) => {
 //Receive Lock and Battery Status
 var lock_bat = new Map()
 app.post('/saveLockBat', (req, res) => {
+	console.log("status save ...");
 	const token = req.body.token;
 	const locked = req.body.locked;
 	const battery = req.body.battery;

@@ -26,6 +26,22 @@ const pool = mysql.createPool({
 })
 const connection = pool;
 
+//For JWT token generation
+const jwt = require('jsonwebtoken');
+const secret = 'REPLACE ME'
+function get_token(payload) {
+	return jwt.sign(payload, secret, { expiresIn: '24h' });
+}
+
+function verify_token(token) {
+	try {
+  		var decoded = jwt.verify(token, secret);
+		return true
+	} catch(err) {
+		return false
+	}
+}
+
 //Read in command line input
 app.use(bodyParser.urlencoded({extended: false}))
 app.use(bodyParser.json())
@@ -89,7 +105,7 @@ app.post('/register', (req,res) => {
 			res.send(err)
 		} else if (rows.length == 0) {
 			//Register User
-			token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+			token = get_token(req.body);
 
 			//Hash Password
 			bcrypt.hash(password, saltRounds, function(err, hash) {
@@ -114,7 +130,7 @@ app.post('/register', (req,res) => {
 
 		} else {
 			//Username Exists already
-			res.sendStatus(400)
+			res.status(400).send("Username exists already!")
 		}
 		return
 	})
@@ -149,7 +165,7 @@ app.post('/login', (req,res) => {
 							res.send(err)
 						} else if (rows[0].token == "" || rows[0].token == null) {
 							//No token, must generate
-							token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+							token = get_token(req.body);
 							queryStr = "UPDATE User SET token = ?, token_bday = now() WHERE login = ? AND password = ?;"
 							connection.query(queryStr, [token, username, password], (err,rows,fields) => {
 								if (err) {
@@ -859,22 +875,28 @@ app.post('/saveCommands', (req, res) => {
 		res.sendStatus(400)
 		res.end()
 	}
-	var queryStr = "SELECT token FROM User where token = ?;"
-	connection.query(queryStr, [token], (err,rows,fields) => {
-		if (err) {
-			res.send(err)
-		} else if (rows.length == 0 || rows[0].token == "" || rows[0].token == null) {
-			//Never logged in or token is outdated
-			res.send("User never logged in or token out of date. Please get new token.")
-		} else {
+
+	//Verify Token
+	if (!verify_token(token)) {
+		res.status(400).send("Token Invalid")
+	}
+
+	// var queryStr = "SELECT token FROM User where token = ?;"
+	// connection.query(queryStr, [token], (err,rows,fields) => {
+	// 	if (err) {
+	// 		res.send(err)
+	// 	} else if (rows.length == 0 || rows[0].token == "" || rows[0].token == null) {
+	// 		//Never logged in or token is outdated
+	// 		res.send("User never logged in or token out of date. Please get new token.")
+	// 	} else {
 			commands.set(token, command)
 			if (commands.has(token) == false) {
 				res.sendStatus(418)
 			}
 			res.end()
 			return
-		}
-	})
+	// 	}
+	// })
 })
 
 
@@ -909,6 +931,12 @@ app.post('/checkCommands', (req, res) => {
 		res.sendStatus(400)
 		res.end()
 	}
+
+	//Verify Token
+	if (!verify_token(token)) {
+		res.status(400).send("Token Invalid")
+	}
+
 	if (commands.has(token) == false) {
 
 		//Start Long Polling
@@ -931,22 +959,26 @@ app.post('/saveLockBat', (req, res) => {
 		res.end()
 	}
 
-	var queryStr = "SELECT token FROM User where token = ?;"
-	connection.query(queryStr, [token], (err,rows,fields) => {
-		if (err) {
-			res.sendStatus(400)
-		} else if (rows.length == 0 || rows[0].token == "" || rows[0].token == null) {
-			//Never logged in or token is outdated
-			res.send("User never logged in or token out of date. Please get new token.")
-		} else {
+	if (!verify_token(token)) {
+		res.status(400).send("Token Invalid")
+	}
+
+	//var queryStr = "SELECT token FROM User where token = ?;"
+	//connection.query(queryStr, [token], (err,rows,fields) => {
+		//if (err) {
+		//	res.sendStatus(400)
+		//} else if (rows.length == 0 || rows[0].token == "" || rows[0].token == null) {
+		//	//Never logged in or token is outdated
+		//	res.send("User never logged in or token out of date. Please get new token.")
+		//} else {
 			lock_bat.set(token, [locked, battery])
 			if (lock_bat.has(token) == false) {
-				res.sendStatus(418)
+				res.status(400).send("Token Invalid")
 			}
 			res.end()
 			return
-		}
-	})
+		//}
+	//})
 
 
 })
@@ -957,6 +989,10 @@ app.post('/checkStatus', (req, res) => {
 	if (token == null || token == "") {
 		res.sendStatus(400)
 		res.end()
+	}
+
+	if (!verify_token(token)) {
+		res.status(400).send("Token Invalid")
 	}
 
 	if (lock_bat.has(token) == false) {

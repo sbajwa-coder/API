@@ -28,14 +28,14 @@ const connection = pool;
 
 //For JWT token generation
 const jwt = require('jsonwebtoken');
-const secret = 'REPLACE ME'
+const config = require('./config')
 function get_token(payload) {
-	return jwt.sign(payload, secret, { expiresIn: '24h' });
+	return jwt.sign(payload, config.secret, { expiresIn: '24h' });
 }
 
 function verify_token(token) {
 	try {
-  		var decoded = jwt.verify(token, secret);
+  		var decoded = jwt.verify(token, config.secret);
 		return true
 	} catch(err) {
 		return false
@@ -45,6 +45,9 @@ function verify_token(token) {
 //Read in command line input
 app.use(bodyParser.urlencoded({extended: false}))
 app.use(bodyParser.json())
+
+//Logging in attempt cap stuff
+const login_timeout_cap = 1;	//minutes
 
 //Error Codes
 /*
@@ -138,6 +141,39 @@ app.post('/register', (req,res) => {
 });
 
 /*Login*/
+function loginToken(username, password, db_token, req, res) {
+	if (db_token == "" || db_token == null) {
+		//No token, must generate
+		token = get_token(req.body);
+
+		//Make login_attempt = 0 since correct login
+		queryStr = "UPDATE User SET token = ?, token_bday = now(), login_attempts = 0 WHERE login = ? AND password = ?;"
+		connection.query(queryStr, [token, username, password], (err,rows,fields) => {
+			if (err) {
+				res.send(err)
+			} else {
+				//Send Token back
+				res.send(token)
+			}
+		})//End database query
+
+	} else {
+		//Token already exists
+		token = db_token
+
+		//Update login_attempts = 0 since correct
+		queryStr = "UPDATE User SET login_attempts = 0, timed_out = false WHERE login = ? AND password = ?;"
+		connection.query(queryStr, [username, password], (err,rows,fields) => {
+			if (err) {
+				res.send(err)
+			} else {
+				res.send(token)
+			}
+		})//End database query
+
+	}
+}
+
 app.post('/login', (req,res) => {
 	const username = req.body.uname;
 	var password = req.body.pass;
@@ -154,35 +190,79 @@ app.post('/login', (req,res) => {
 			//Your Username is incorrect
 			res.sendStatus(400)
 		} else {
-			// Load hash from your password DB.
+			// Compare database password to password provided
 			bcrypt.compare(password, rows[0].password, function(err, is_same) {
 				if (is_same) {
 					//Password is correct
 					password = rows[0].password
-					queryStr = "SELECT token FROM User WHERE login = ? AND password = ?;"
+					queryStr = "SELECT token, timed_out FROM User WHERE login = ? AND password = ?;"
 					connection.query(queryStr, [username, password], (err,rows,fields) => {
 						if (err) {
 							res.send(err)
-						} else if (rows[0].token == "" || rows[0].token == null) {
-							//No token, must generate
-							token = get_token(req.body);
-							queryStr = "UPDATE User SET token = ?, token_bday = now() WHERE login = ? AND password = ?;"
-							connection.query(queryStr, [token, username, password], (err,rows,fields) => {
+						}
+
+						timed_out = rows[0].timed_out
+						db_token = rows[0].token
+
+						if (timed_out) {
+							// res.send("This account has been timed out 3");
+							queryStr = "SELECT TIME_TO_SEC(TIMEDIFF(now(), (SELECT login_timeout FROM User WHERE login = ?)))/60 AS time_passed;"
+							connection.query(queryStr, [username], (err,rows,fields) => {
 								if (err) {
 									res.send(err)
 								} else {
-									//Send Token back
-									res.send(token)
+									time_passed = rows[0].time_passed
+
+									//If enough time has passed, and correct credentials, then
+									if (time_passed > login_timeout_cap) {
+										queryStr = "UPDATE User SET login_attempts = 0, timed_out = false, login_timeout = NULL WHERE login = ?;"
+										connection.query(queryStr, [username, password], (err,rows,fields) => {
+											if (err) {
+												res.send(err)
+											} else {
+												loginToken(username, password, db_token, req, res)
+											}
+										})
+									} else {
+										res.send("This account has been timed out!");
+									}
 								}
-							})//End database query
-						} else {
-							//Token already exists, return token to user
-							res.send(rows[0].token)
+							})
 						}
 					})//End databse query
+
 				} else {
-					//Password incorrect
-					res.sendStatus(400)
+					//Password incorrect, increment login attempt counter
+					queryStr = "UPDATE User SET login_attempts = login_attempts + 1 WHERE login = ?;"
+					connection.query(queryStr, [username, password], (err,rows,fields) => {
+						if (err) {
+							res.send(err)
+						} else {
+							queryStr = "SELECT login_attempts, timed_out FROM User WHERE login = ?;"
+							connection.query(queryStr, [username], (err,rows,fields) => {
+								if (err) {
+									res.send(err)
+								} else if (rows[0].login_attempts >= 5) {
+									if (rows[0].timed_out == false) {
+										//Timeout account if not already timed out
+										queryStr = "UPDATE User SET timed_out = true, login_timeout = now() WHERE login = ?;"
+										connection.query(queryStr, [username], (err,rows,fields) => {
+											if (err) {
+												res.send(err)
+											}
+											res.send("This account has been timed out!");
+										})
+									} else {
+										//ALready timed out
+										res.send("This account has been timed out!");
+									}
+								} else {
+									res.status(400).send("Username or Password incorrect!")
+								}
+							})
+						}
+					})//End database query
+
 				}
 			})//end bcrypt
 		}

@@ -49,8 +49,7 @@ app.use(bodyParser.json())
 //Logging in attempt cap stuff
 const login_timeout_cap = 1;	//minutes
 
-//Error Codes
-/*
+/*Error Codes
 500 - Internal Server Error
 400 - Bad Request
 403 - Forbidden
@@ -147,7 +146,7 @@ function loginToken(username, password, db_token, req, res) {
 		token = get_token(req.body);
 
 		//Make login_attempt = 0 since correct login
-		queryStr = "UPDATE User SET token = ?, token_bday = now(), login_attempts = 0 WHERE login = ? AND password = ?;"
+		queryStr = "UPDATE User SET token = ?, token_bday = now(), login_attempts = 0, timed_out = false WHERE login = ? AND password = ?;"
 		connection.query(queryStr, [token, username, password], (err,rows,fields) => {
 			if (err) {
 				res.send(err)
@@ -192,6 +191,7 @@ app.post('/login', (req,res) => {
 		} else {
 			// Compare database password to password provided
 			bcrypt.compare(password, rows[0].password, function(err, is_same) {
+
 				if (is_same) {
 					//Password is correct
 					password = rows[0].password
@@ -203,9 +203,8 @@ app.post('/login', (req,res) => {
 
 						timed_out = rows[0].timed_out
 						db_token = rows[0].token
-
 						if (timed_out) {
-							// res.send("This account has been timed out 3");
+							//Check if timeout period over
 							queryStr = "SELECT TIME_TO_SEC(TIMEDIFF(now(), (SELECT login_timeout FROM User WHERE login = ?)))/60 AS time_passed;"
 							connection.query(queryStr, [username], (err,rows,fields) => {
 								if (err) {
@@ -228,6 +227,9 @@ app.post('/login', (req,res) => {
 									}
 								}
 							})
+						} else {
+							//Not timed out
+							loginToken(username, password, db_token, req, res)
 						}
 					})//End databse query
 
@@ -412,20 +414,28 @@ app.post('/sendNewPassword', (req,res) => {
 	        	"Sincerely, your Spicy team"
     		}
     		smtpTransport.sendMail(mailOptions, function(error, response){
-			    if(error){
-			        res.end("error");
-			    } else {
-			        queryStr = "UPDATE User SET password = ? WHERE login = ?;"
-            		connection.query(queryStr, [temporaryPassword, username], (err, rows, fields) => {
-                		if (err) {
-                    		//Failed to register
-                    		res.send(err);
-                		} else {
-                    		res.send("Successfully changed password for: " + username + "!\n")
-                		}
-            		})
-			    }
-			});
+                if(error){
+                    res.end("error");
+                } else {
+                    bcrypt.hash(temporaryPassword, saltRounds, function(err, hash) {
+                        if (err) {
+                            res.send(err)
+                        } else {
+                            // Store hash in your password DB.
+                            queryStr = "UPDATE User SET password = ? WHERE login = ?;";
+                            connection.query(queryStr, [hash, username], (err, rows, fields) => {
+                                if (err) {
+                                    //Failed to register
+                                    res.send(err);
+                                } else {
+                                    res.send("Successfully changed password for: " + username + "!\n");
+                                }
+                            })
+
+                        }
+                    })
+                }
+            });
         }
         return
     })
@@ -450,7 +460,9 @@ app.post('/sendConfirmEmail', (req,res) => {
                 from : "securelocksignal@gmail.com",
                 to : username,
                 subject : "Spicy Lock Shawarma: confirm your email",
-                html : "link: " + link
+                html : "Hello there! Please confirm your email for your SLS account by clikcing the link: "
+						+ link + "<br/> Thanks for using the app! <br/>" + "Sincerely, your Spicy team"
+
             }
             smtpTransport.sendMail(mailOptions, function(error, response){
                 if(error){

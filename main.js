@@ -348,7 +348,7 @@ app.post('/changeUsername', (req,res) => {
                     res.send(err);
                 	} else if (rows.length == 0) {
                     //Your Username and Password are correct => changing username
-            			queryStr = "UPDATE User SET login = ? WHERE login = ?;"
+            			queryStr = "UPDATE User SET login = ? , confirmed = 0 WHERE login = ?;"
             			connection.query(queryStr, [newUsername, oldUsername], (err, rows, fields) => {
                 			if (err) {
                     			//Failed to register

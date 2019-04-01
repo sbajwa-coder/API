@@ -88,7 +88,7 @@ httpsServer.listen(port, () => {
 /*BEGIN API*/
 /*Default Screen*/
 app.get('/', (req,res) => {
-	res.send('HIIII333!');
+	res.send('Secure Lock Signal!');
 });
 
 /*Create New User*/
@@ -181,13 +181,15 @@ app.post('/login', (req,res) => {
 		res.end()
 	}
 
-	var queryStr = "SELECT password FROM User WHERE login = ?;"
+	var queryStr = "SELECT password,confirmed FROM User WHERE login = ?;"
 	connection.query(queryStr, [username], (err,rows,fields) => {
 		if (err) {
 			res.send(err)
 		} else if (rows.length == 0) {
 			//Your Username is incorrect
 			res.sendStatus(400)
+		} else if (rows[0].confirmed!=1){
+			res.sendStatus(401);
 		} else {
 			// Compare database password to password provided
 			bcrypt.compare(password, rows[0].password, function(err, is_same) {
@@ -474,7 +476,7 @@ app.post('/sendConfirmEmail', (req,res) => {
                             //Failed to register
                             res.send(err);
                         } else {
-                            res.send("Successfully send confirm link for: " + username + "!\n")
+                            res.send("Successfully sent confirm link for: " + username + "!\n")
                         }
                     })
                 }
@@ -499,7 +501,8 @@ app.get('/verify',function(req,res){
                             //Failed to register
                             res.send(err);
                         } else {
-                            res.send("Successfully confirmed account for: " + req.query.name + "!\n")
+                            res.send("Successfully verified account for: " + req.query.name + "!<br>"+
+													"Please login to the SLS app to continue.<br>")
                         }
                     })
             }

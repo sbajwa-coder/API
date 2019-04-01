@@ -2,6 +2,7 @@ const mysql = require('mysql');
 const express = require('express');
 const bodyParser = require('body-parser');
 const nodemailer = require("nodemailer");
+const path = require('path');
 
 //For Password hashing
 const bcrypt = require('bcrypt');
@@ -491,18 +492,19 @@ app.get('/verify',function(req,res){
         var queryStr = "SELECT login FROM User WHERE login = ? AND confirmed_id = ?;"
         connection.query(queryStr, [req.query.name, req.query.id], (err,rows,fields) => {
             if (err) {
-                res.send(err)
+                res.status(500).sendFile(path.join(__dirname + '/confirm_fail.html'));
             } else if (rows.length == 0) {
-                res.status(400).send("Something went wrong, request a new confirmation link.")
+                res.status(400).sendFile(path.join(__dirname + '/confirm_fail.html'));
             } else {
                 queryStr = "UPDATE User SET confirmed = 1, confirmed_id = NULL WHERE login = ?;"
                     connection.query(queryStr, [req.query.name], (err, rows, fields) => {
                         if (err) {
                             //Failed to register
-                            res.send(err);
+                            res.status(500).sendFile(path.join(__dirname + '/confirm_fail.html'));
                         } else {
-                            res.send("Successfully verified account for: " + req.query.name + "!<br>"+
-													"Please login to the SLS app to continue.<br>")
+							res.sendFile(path.join(__dirname + '/confirm_succ.html'));
+                           // res.send("Successfully verified account for: " + req.query.name + "!<br>"+
+							//						"Please login to the SLS app to continue.<br>")
                         }
                     })
             }
@@ -511,7 +513,7 @@ app.get('/verify',function(req,res){
     }
     else
     {
-        res.end("<h1>Request is from unknown source</h1>");
+        res.status(500).sendFile(path.join(__dirname + '/confirm_fail.html'));
     }
     return
 });

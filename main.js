@@ -108,7 +108,6 @@ app.post('/register', (req,res) => {
 			res.send(err)
 		} else if (rows.length == 0) {
 			//Register User
-			token = get_token(req.body);
 
 			//Hash Password
 			bcrypt.hash(password, saltRounds, function(err, hash) {
@@ -116,14 +115,13 @@ app.post('/register', (req,res) => {
 					res.send(err)
 				} else {
 					// Store hash in your password DB.
-					queryStr = "INSERT INTO User (login, password, token) VALUES (?, ?, ?);";
-					connection.query(queryStr, [username, hash, token], (err, rows, fields) => {
+					queryStr = "INSERT INTO User (login, password) VALUES (?, ?);";
+					connection.query(queryStr, [username, hash], (err, rows, fields) => {
 						if (err) {
 							//Failed to register
 							res.send(err);
 						} else {
-							res.send(token);
-							//res.send("Successfully registered with: " + username + "!\n")
+							res.end();
 						}
 					})
 

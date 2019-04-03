@@ -963,7 +963,7 @@ app.post('/checkCommands', (req, res) => {
 */
 
 app.post('/saveCommands', (req, res) => {
-	console.log("save commands ...");
+	console.log("save commands ... LOCK UNLOCK MOBILE");
 	const token = req.body.token;
 	const command = req.body.command;
 	if (command == null || token == null || command == "" || token == "") {
@@ -1008,6 +1008,7 @@ async function wait(res, token) {
 		while(timer != 0) {
 			await sleep(ms);
 			timer--;
+			console.log("DESKTOP IS WAITING!")
 
 			if (commands.has(token)) {
 				res.send(commands.get(token))
@@ -1020,7 +1021,7 @@ async function wait(res, token) {
 
 
 app.post('/checkCommands', (req, res) => {
-	console.log("command check ....");
+	console.log("command check .... DESKTOP");
 	const token = req.body.token;
 	if (token == null || token == "") {
 		res.sendStatus(400)
@@ -1036,6 +1037,7 @@ app.post('/checkCommands', (req, res) => {
 
 		//Start Long Polling
 		wait(res, token)
+		res.end()
 	} else {
 		res.send(commands.get(token))
 		commands.delete(token)

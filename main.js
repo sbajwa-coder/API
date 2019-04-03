@@ -1008,7 +1008,6 @@ async function wait(res, token) {
 		while(timer != 0) {
 			await sleep(ms);
 			timer--;
-			console.log("DESKTOP IS WAITING!")
 
 			if (commands.has(token)) {
 				res.send(commands.get(token))
